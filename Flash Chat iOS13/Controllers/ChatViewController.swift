@@ -13,6 +13,7 @@ class ChatViewController: UIViewController {
     
     @IBOutlet weak var tableView: UITableView!
     @IBOutlet weak var messageTextfield: UITextField!
+    let db = Firestore.firestore()
     
     var messages: [Message] = [
         Message(sender: "1@1.com", body: "Hey there!"),
@@ -25,11 +26,58 @@ class ChatViewController: UIViewController {
         tableView.dataSource = self
         title = K.appName
         navigationItem.hidesBackButton = true
-
+        
         tableView.register(UINib(nibName: K.cellNibName, bundle: nil), forCellReuseIdentifier: K.cellIdentifier)
+        
+        loadMessages()
+    }
+    
+    func loadMessages() {
+        //addSnapshotListener method is use to listen for changes in the database and retieve it instantly.
+        //For more information, see the firebase documentation.
+        
+        db.collection(K.FStore.collectionName).order(by: K.FStore.dateField).addSnapshotListener { (querySnapshot, error) in
+            if let e = error {
+                print("Something went wrong while retrieving your data. Error details: \(e.localizedDescription)")
+            } else {
+                self.messages.removeAll()
+                if let document = querySnapshot?.documents {
+                    for doc in document {
+                        let data = doc.data()
+                        if let messageSender = data[K.FStore.senderField] as? String, let messageBody = data[K.FStore.bodyField] as? String{
+                            let newMessage = Message(sender: messageSender, body: messageBody)
+                            self.messages.append(newMessage)
+                            
+                        }
+                    }
+                    DispatchQueue.main.async {
+                        self.tableView.reloadData()
+                    }
+                }
+            }
+        }
     }
     
     @IBAction func sendPressed(_ sender: UIButton) {
+        
+        //Using firestore to save messages
+        if let messageBody = messageTextfield.text, let messageSender = Auth.auth().currentUser?.email {
+            db.collection(K.FStore.collectionName).addDocument(
+                data: [
+                    K.FStore.senderField: messageSender,
+                    K.FStore.bodyField: messageBody,
+                    K.FStore.dateField: Date().timeIntervalSince1970
+                ])
+            { (error) in
+                if let e = error{
+                    print("There was an error trying to save your data. Error details: \(e)")
+                } else {
+                    print("Your data has been saved successfully.")
+                    self.messageTextfield.text = ""
+                }
+            }
+            
+        }
         
     }
     
